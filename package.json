@@ -1,5 +1,6 @@
 {
     "name": "@codecrafters/build-your-own-http-server",
+    "type": "module",
     "version": "1.0.0",
     "description": "Build your own HTTP-Server challenge, from CodeCrafters",
     "main": "main.js",
