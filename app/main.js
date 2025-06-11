@@ -32,8 +32,6 @@ const statusline_404 = () => {
 // Accept: */*
 
 const server = net.createServer((socket) => {
-    socket.write(statusline_200());
-
     socket.on("data", (data) => {
         const request = data.toString();
         const request_line = request.split(crlf)[0];
