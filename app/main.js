@@ -1,35 +1,47 @@
-import { Socket } from "dgram";
 import net from "net";
 
-// You can use print statements as follows for debugging, they'll be visible when running tests.
-console.log("Logs from your program will appear here!");
+console.log("server is running...");
 
-const crlf = "\r\n\r\n";
+const crlf = "\r\n";
 
-const statusline_200 = () => {
+// --- status lines ---
+const get_statusline_200 = () => {
     const httVersion = "HTTP/1.1";
     const statusCode = "200";
     const reasonPhrase = "OK";
-    const response = `${httVersion} ${statusCode} ${reasonPhrase}${crlf}`;
-
-    return response;
+    return `${httVersion} ${statusCode} ${reasonPhrase}${crlf}`;
 };
 
 const statusline_404 = () => {
     const httVersion = "HTTP/1.1";
     const statusCode = "404";
     const reasonPhrase = "Not Found";
+    const body = "404 Not Found";
 
-    const response = `${httVersion} ${statusCode} ${reasonPhrase}${crlf}`;
+    const content_type = `Content-Type: text/plain${crlf}`;
+    const content_length = `Content-Length: ${body.length}${crlf}`;
 
-    return response;
+    return `${httVersion} ${statusCode} ${reasonPhrase}${crlf}${content_type}${content_length}${crlf}${body}`;
 };
 
-// GET /index.html HTTP/1.1\r\nHost: localhost:4221\r\nUser-Agent: curl/7.64.1\r\nAccept: */*\r\n\r\n
-// GET /abcdefg HTTP/1.1
-// Host: localhost:4221
-// User-Agent: curl/8.12.1
-// Accept: */*
+// --- headers ---
+const get_response_header = (content) => {
+    const content_type = `Content-Type: text/plain${crlf}`;
+    const bytes = new TextEncoder().encode(content);
+    const content_length = `Content-Length: ${bytes.length}${crlf}`;
+
+    return `${content_type}${content_length}${crlf}`;
+};
+
+// --- body ---
+const get_response_body = (content) => {
+    return `${content}`;
+};
+
+const getContent = (str) => {
+    const str_length = str.split("/").length;
+    return str.split("/")[str_length - 1];
+};
 
 const server = net.createServer((socket) => {
     socket.on("data", (data) => {
@@ -38,8 +50,23 @@ const server = net.createServer((socket) => {
         const [method, slug] = request_line.split(" ");
         console.log(method, slug);
 
-        if (slug == "/") {
-            socket.write(statusline_200());
+        if (slug === "/") {
+            const content = "";
+
+            const status_line = get_statusline_200();
+            const header = get_response_header(content);
+            const body = get_response_body(content);
+
+            const response = `${status_line}${header}${body}`;
+            socket.write(response);
+        } else if (slug.startsWith("/echo/")) {
+            const content = getContent(slug);
+            const status_line = get_statusline_200();
+            const header = get_response_header(content);
+            const body = get_response_body(content);
+
+            const response = `${status_line}${header}${body}`;
+            socket.write(response);
         } else {
             socket.write(statusline_404());
         }
