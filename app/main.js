@@ -1,8 +1,15 @@
 import net from "net";
+import fs from "fs";
+import path from "path";
+import { type } from "os";
 
 console.log("server is running...");
 
 const crlf = "\r\n";
+const workingDir = process.cwd();
+const dirArgIndex = process.argv.indexOf("--directory");
+const baseDirectory =
+    dirArgIndex !== -1 ? process.argv[dirArgIndex + 1] : workingDir;
 
 // --- status lines ---
 const get_statusline_200 = () => {
@@ -25,8 +32,8 @@ const statusline_404 = () => {
 };
 
 // --- headers ---
-const get_response_header = (content) => {
-    const content_type = `Content-Type: text/plain${crlf}`;
+const get_response_header = (content, type = "text/plain") => {
+    const content_type = `Content-Type: ${type}${crlf}`;
     const bytes = new TextEncoder().encode(content);
     const content_length = `Content-Length: ${bytes.length}${crlf}`;
 
@@ -38,7 +45,7 @@ const get_response_body = (content) => {
     return `${content}`;
 };
 
-const getContent = (str) => {
+const getEndPoint = (str) => {
     const str_length = str.split("/").length;
     return str.split("/")[str_length - 1];
 };
@@ -60,7 +67,7 @@ const server = net.createServer((socket) => {
             const response = `${status_line}${header}${body}`;
             socket.write(response);
         } else if (slug.startsWith("/echo/")) {
-            const content = getContent(slug);
+            const content = getEndPoint(slug);
             const status_line = get_statusline_200();
             const header = get_response_header(content);
             const body = get_response_body(content);
@@ -82,6 +89,27 @@ const server = net.createServer((socket) => {
             console.log(response);
 
             socket.write(response);
+        } else if (slug.startsWith("/files/")) {
+            const fileName = getEndPoint(slug);
+            const pathName = path.join(baseDirectory, fileName);
+
+            if (fs.existsSync(pathName)) {
+                const fileContent = fs.readFileSync(pathName, "utf8");
+                const content = fileContent;
+                const status_line = get_statusline_200();
+                const header = get_response_header(
+                    content,
+                    "application/octet-stream",
+                );
+                const body = get_response_body(content);
+
+                const response = `${status_line}${header}${body}`;
+
+                socket.write(response);
+            } else {
+                const status_line = statusline_404();
+                socket.write(status_line);
+            }
         } else {
             socket.write(statusline_404());
         }
