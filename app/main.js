@@ -67,6 +67,21 @@ const server = net.createServer((socket) => {
 
             const response = `${status_line}${header}${body}`;
             socket.write(response);
+        } else if (slug.startsWith("/user-agent")) {
+            const lines = data.toString().split(crlf);
+            const [user_agent] = lines.filter((line) =>
+                line.toLowerCase().startsWith("user-agent"),
+            );
+            const [_, content] = user_agent.split(" ");
+
+            const status_line = get_statusline_200();
+            const header = get_response_header(content);
+            const body = get_response_body(content);
+
+            const response = `${status_line}${header}${body}`;
+            console.log(response);
+
+            socket.write(response);
         } else {
             socket.write(statusline_404());
         }
