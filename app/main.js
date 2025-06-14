@@ -36,6 +36,7 @@ const get_response_header = (
     content,
     type = "text/plain",
     compression_type,
+    connection_type,
 ) => {
     const content_type = `Content-Type: ${type}${crlf}`;
     const contentLength = Buffer.isBuffer(content)
@@ -43,12 +44,17 @@ const get_response_header = (
         : Buffer.byteLength(content, "utf8");
     const content_length = `Content-Length: ${contentLength}${crlf}`;
 
+    let headers = content_type + content_length;
+
     if (compression_type) {
-        const encoding = `Content-Encoding: ${compression_type}${crlf}`;
-        return `${content_type}${encoding}${content_length}${crlf}`;
-    } else {
-        return `${content_type}${content_length}${crlf}`;
+        headers += `Content-Encoding: ${compression_type}${crlf}`;
     }
+
+    if (connection_type) {
+        headers += `Connection: ${connection_type}${crlf}`;
+    }
+
+    return headers + crlf;
 };
 
 // --- body ---
@@ -89,14 +95,21 @@ const server = net.createServer((socket) => {
         const [method, slug] = request_line.split(" ");
         const headers = parseHeader(request);
         const acceptEncoding = headers["accept-encoding"];
-        console.log(acceptEncoding);
+        const connectionType =
+            headers["connection"] === "close" ? "close" : undefined;
+        console.log(headers["connection"]);
 
         if (method == "GET") {
             if (slug === "/") {
                 const content = "";
 
                 const status_line = get_statusline_200();
-                const header = get_response_header(content, "text/plain");
+                const header = get_response_header(
+                    content,
+                    "text/plain",
+                    undefined,
+                    connectionType,
+                );
                 const body = get_response_body(content);
 
                 const response = `${status_line}${header}${body}`;
@@ -125,6 +138,7 @@ const server = net.createServer((socket) => {
                     responseContent,
                     "text/plain",
                     compressionType,
+                    connectionType,
                 );
 
                 const statusAndHeaders = status_line + header;
@@ -149,7 +163,12 @@ const server = net.createServer((socket) => {
                 const [_, content] = user_agent.split(" ");
 
                 const status_line = get_statusline_200();
-                const header = get_response_header(content, "text/plain");
+                const header = get_response_header(
+                    content,
+                    "text/plain",
+                    undefined,
+                    connectionType,
+                );
                 const body = get_response_body(content);
 
                 const response = `${status_line}${header}${body}`;
@@ -167,6 +186,8 @@ const server = net.createServer((socket) => {
                     const header = get_response_header(
                         content,
                         "application/octet-stream",
+                        undefined,
+                        connectionType,
                     );
                     const body = get_response_body(content);
 
@@ -197,6 +218,10 @@ const server = net.createServer((socket) => {
 
                 socket.write("HTTP/1.1 201 Created\r\n\r\n");
             }
+        }
+
+        if (headers["connection"] == "close") {
+            socket.end();
         }
     });
 });
