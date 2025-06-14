@@ -32,12 +32,21 @@ const statusline_404 = () => {
 };
 
 // --- headers ---
-const get_response_header = (content, type = "text/plain") => {
+const get_response_header = (
+    content,
+    type = "text/plain",
+    compression_type,
+) => {
     const content_type = `Content-Type: ${type}${crlf}`;
     const bytes = new TextEncoder().encode(content);
     const content_length = `Content-Length: ${bytes.length}${crlf}`;
 
-    return `${content_type}${content_length}${crlf}`;
+    if (compression_type) {
+        const encoding = `Content-Encoding: ${compression_type}`;
+        return `${content_type}${encoding}${crlf}${content_length}${crlf}`;
+    } else {
+        return `${content_type}${content_length}${crlf}`;
+    }
 };
 
 // --- body ---
@@ -54,18 +63,38 @@ const getBody = (content) => {
     return content[content.length - 1];
 };
 
+const parseHeader = (request) => {
+    const lines = request.split(crlf);
+
+    let headers = {};
+
+    for (let i = 1; i < lines.length; i++) {
+        let line = lines[i];
+
+        if (line != "") {
+            let [key, value] = line.split(": ");
+            headers[key.toLowerCase()] = value;
+        }
+    }
+
+    return headers;
+};
+
 const server = net.createServer((socket) => {
     socket.on("data", (data) => {
         const request = data.toString();
         const request_line = request.split(crlf)[0];
         const [method, slug] = request_line.split(" ");
+        const headers = parseHeader(request);
+        const acceptEncoding = headers["accept-encoding"];
+        console.log(acceptEncoding);
 
         if (method == "GET") {
             if (slug === "/") {
                 const content = "";
 
                 const status_line = get_statusline_200();
-                const header = get_response_header(content);
+                const header = get_response_header(content, "text/plain");
                 const body = get_response_body(content);
 
                 const response = `${status_line}${header}${body}`;
@@ -73,7 +102,16 @@ const server = net.createServer((socket) => {
             } else if (slug.startsWith("/echo/")) {
                 const content = getEndPoint(slug);
                 const status_line = get_statusline_200();
-                const header = get_response_header(content);
+
+                const shouldCompress =
+                    acceptEncoding && acceptEncoding.includes("gzip");
+                const compressionType = shouldCompress ? "gzip" : undefined;
+
+                const header = get_response_header(
+                    content,
+                    "text/plain",
+                    compressionType,
+                );
                 const body = get_response_body(content);
 
                 const response = `${status_line}${header}${body}`;
@@ -86,7 +124,7 @@ const server = net.createServer((socket) => {
                 const [_, content] = user_agent.split(" ");
 
                 const status_line = get_statusline_200();
-                const header = get_response_header(content);
+                const header = get_response_header(content, "text/plain");
                 const body = get_response_body(content);
 
                 const response = `${status_line}${header}${body}`;
