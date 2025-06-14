@@ -1,7 +1,7 @@
 import net from "net";
 import fs from "fs";
 import path from "path";
-import { type } from "os";
+import zlib from "zlib";
 
 console.log("server is running...");
 
@@ -38,12 +38,14 @@ const get_response_header = (
     compression_type,
 ) => {
     const content_type = `Content-Type: ${type}${crlf}`;
-    const bytes = new TextEncoder().encode(content);
-    const content_length = `Content-Length: ${bytes.length}${crlf}`;
+    const contentLength = Buffer.isBuffer(content)
+        ? content.length
+        : Buffer.byteLength(content, "utf8");
+    const content_length = `Content-Length: ${contentLength}${crlf}`;
 
     if (compression_type) {
-        const encoding = `Content-Encoding: ${compression_type}`;
-        return `${content_type}${encoding}${crlf}${content_length}${crlf}`;
+        const encoding = `Content-Encoding: ${compression_type}${crlf}`;
+        return `${content_type}${encoding}${content_length}${crlf}`;
     } else {
         return `${content_type}${content_length}${crlf}`;
     }
@@ -51,7 +53,7 @@ const get_response_header = (
 
 // --- body ---
 const get_response_body = (content) => {
-    return `${content}`;
+    return content;
 };
 
 const getEndPoint = (str) => {
@@ -105,16 +107,39 @@ const server = net.createServer((socket) => {
 
                 const shouldCompress =
                     acceptEncoding && acceptEncoding.includes("gzip");
-                const compressionType = shouldCompress ? "gzip" : undefined;
+
+                let responseContent;
+                let compressionType;
+
+                if (shouldCompress) {
+                    // compressed content
+                    responseContent = zlib.gzipSync(content);
+                    compressionType = "gzip";
+                } else {
+                    // uncompressed content
+                    responseContent = content;
+                    compressionType = undefined;
+                }
 
                 const header = get_response_header(
-                    content,
+                    responseContent,
                     "text/plain",
                     compressionType,
                 );
-                const body = get_response_body(content);
 
-                const response = `${status_line}${header}${body}`;
+                const statusAndHeaders = status_line + header;
+                const statusAndHeadersBuffer = Buffer.from(
+                    statusAndHeaders,
+                    "utf8",
+                );
+                const contentBuffer = Buffer.isBuffer(responseContent)
+                    ? responseContent
+                    : Buffer.from(responseContent, "utf8");
+
+                const response = Buffer.concat([
+                    statusAndHeadersBuffer,
+                    contentBuffer,
+                ]);
                 socket.write(response);
             } else if (slug.startsWith("/user-agent")) {
                 const lines = data.toString().split(crlf);
